@@ -77,34 +77,31 @@ def main(args):
     np.random.seed(42) # numpy random seed
     torch.backends.cudnn.deterministic = True
 
-    tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
-    
-    val_params = {
-        'batch_size': 32,
-        'shuffle': False,
-        'num_workers': 2
-    }
-    
+    print("Loading tokenizer, model, and dataset...")
+    tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')    
     model = BartForConditionalGeneration.from_pretrained(args.checkpoint)
     model = model.to(device)
-    optimizer = torch.optim.Adam(params =  model.parameters(), lr=1e-5)
     
     val_df = pd.read_csv(args.eval_file, sep='\t')
     val_set = CustomDataset(val_df, tokenizer, 512, 150)
-    val_loader = DataLoader(val_set, **val_params)
+    val_loader = DataLoader(val_set, batch_size=32, shuffle=False, num_workers=8)
+
+    print(f"Validating {args.checkpoint} on {args.eval_file}:")
     predictions, actuals = validate(tokenizer, model, device, val_loader)
+
     print_scores(actuals, predictions)
-    
-def print_scores(ref, pred) :
+
+
+def print_scores(ref, pred):
     f = open('ref.txt', 'w')
-    for r in ref :
+    for r in ref:
         f.write(r+'\n')
     f.close()
     f = open('pred.txt', 'w')
-    for p in pred :
+    for p in pred:
         f.write(p+'\n')
     f.close()
-    try :
+    try:
         compute_metrics(hypothesis='pred.txt',
                                references=['ref.txt'])
     except:

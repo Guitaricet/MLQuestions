@@ -61,7 +61,8 @@ class BiEncoderTrainer(object):
 
         # if model file is specified, encoder parameters from saved state should be used for initialization
         model_file = get_model_file(self.args, self.args.checkpoint_file_name)
-        print ('working....', model_file)
+        print(model_file)
+
         saved_state = None
         if model_file:
             saved_state = load_states_from_checkpoint(model_file)
@@ -136,7 +137,7 @@ class BiEncoderTrainer(object):
 
     def validate_and_save(self, epoch: int, iteration: int, scheduler):
         args = self.args
-        if epoch < args.validate_model_after :
+        if epoch < args.validate_model_after:
             return
         # for distributed mode, save checkpoint for only one process
         save_cp = args.local_rank in [-1, 0]
@@ -206,7 +207,7 @@ class BiEncoderTrainer(object):
         Then the similarity scores are calculted for the entire
         num_questions x (num_questions x num_passages_per_question) matrix and sorted per quesrtion.
         Each question's gold passage rank in that  sorted list of scores is averaged across all the questions.
-        :return: averaged rank number
+       :return: averaged rank number
         """
         logger.info('Average rank validation ...')
 
@@ -377,7 +378,7 @@ class BiEncoderTrainer(object):
 
     def _save_checkpoint(self, scheduler, epoch: int, offset: int) -> str:
         args = self.args
-        if args.save_model == 0 or epoch < args.save_model_after :
+        if args.save_model == 0 or epoch < args.save_model_after:
             return None
         model_to_save = get_model_obj(self.biencoder)
         cp = os.path.join(args.output_dir,
@@ -410,12 +411,12 @@ class BiEncoderTrainer(object):
         model_to_load.load_state_dict(saved_state.model_dict)  # set strict=False if you use extra projection
 
         #if saved_state.optimizer_dict:
-        if 1==2 :
+        if 1==2:
             logger.info('Loading saved optimizer state ...')
             self.optimizer.load_state_dict(saved_state.optimizer_dict)
 
         #if saved_state.scheduler_dict:
-        if 1==2 :
+        if 1==2:
             self.scheduler_state = saved_state.scheduler_dict
 
 

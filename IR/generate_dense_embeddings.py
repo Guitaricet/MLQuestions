@@ -9,11 +9,11 @@
  Command line tool that produces embeddings for a large documents base based on the pretrained ctx & question encoders
  Supposed to be used in a 'sharded' way to speed up the process.
 """
+import sys
 import os
 import pathlib
 import pandas as pd
 import argparse
-import csv
 import logging
 import pickle
 from typing import List, Tuple
@@ -21,6 +21,8 @@ from typing import List, Tuple
 import numpy as np
 import torch
 from torch import nn
+from tqdm.auto import tqdm
+
 
 from dpr.models import init_biencoder_components
 from dpr.options import add_encoder_params, setup_args_gpu, print_args, set_encoder_params_from_state, \
@@ -28,12 +30,16 @@ from dpr.options import add_encoder_params, setup_args_gpu, print_args, set_enco
 from dpr.utils.data_utils import Tensorizer
 from dpr.utils.model_utils import setup_for_distributed_mode, get_model_obj, load_states_from_checkpoint,move_to_device
 
+
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.INFO,
+    stream=sys.stdout,
+)
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-if (logger.hasHandlers()):
-    logger.handlers.clear()
-console = logging.StreamHandler()
-logger.addHandler(console)
+logging.getLogger("transformers.configuration_utils").setLevel(logging.WARNING)
+
 
 def gen_ctx_vectors(ctx_rows: List[Tuple[object, str, str]], model: nn.Module, tensorizer: Tensorizer,
                     insert_title: bool = True) -> List[Tuple[object, np.array]]:
@@ -41,7 +47,7 @@ def gen_ctx_vectors(ctx_rows: List[Tuple[object, str, str]], model: nn.Module, t
     bsz = args.batch_size
     total = 0
     results = []
-    for j, batch_start in enumerate(range(0, n, bsz)):
+    for j, batch_start in tqdm(enumerate(range(0, n, bsz)), total=int(n / bsz), desc="Encoding passages"):
 
         batch_token_tensors = [tensorizer.text_to_tensor(ctx[1], title=ctx[2] if insert_title else None) for ctx in
                                ctx_rows[batch_start:batch_start + bsz]]
@@ -63,9 +69,6 @@ def gen_ctx_vectors(ctx_rows: List[Tuple[object, str, str]], model: nn.Module, t
             (ctx_ids[i], out[i].view(-1).numpy())
             for i in range(out.size(0))
         ])
-
-        if total % 10 == 0:
-            logger.info('Encoded passages %d', total)
 
     return results
 
@@ -138,5 +141,4 @@ if __name__ == '__main__':
 
     setup_args_gpu(args)
 
-    
     main(args)

@@ -8,23 +8,39 @@ import pickle
 import numpy as np
 import pandas as pd
 import argparse
+from tqdm.auto import tqdm
 
 
-def main(args) :
+def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    namespace = Namespace(batch_size=32, distributed_world_size=1, device=device, do_lower_case=False, encoder_model_type='hf_bert', 
-                     fp16=False, fp16_opt_level='O1', local_rank=-1, 
-                     model_file=args.model_file, 
-                     n_gpu=1, no_cuda=False, num_shards=1, pretrained_file=None, 
-                     pretrained_model_cfg='bert-base-uncased', projection_dim=0, sequence_length=512, shard_id=0)
-    saved_state = load_states_from_checkpoint(namespace.model_file)
-    set_encoder_params_from_state(saved_state.encoder_params, namespace)
-    tensorizer, encoder, _ = init_biencoder_components(namespace.encoder_model_type, namespace, inference_only=True)
+    dpr_args = Namespace(
+        batch_size=32,
+        distributed_world_size=1,
+        device=device,
+        do_lower_case=False,
+        encoder_model_type='hf_bert',
+        fp16=False,
+        fp16_opt_level='O1',
+        local_rank=-1, 
+        model_file=args.model_file, 
+        n_gpu=1,
+        no_cuda=False,
+        num_shards=1,
+        pretrained_file=None, 
+        pretrained_model_cfg='bert-base-uncased',
+        projection_dim=0,
+        sequence_length=512,
+        shard_id=0,
+    )
+
+    saved_state = load_states_from_checkpoint(dpr_args.model_file)
+    set_encoder_params_from_state(saved_state.encoder_params, dpr_args)
+    tensorizer, encoder, _ = init_biencoder_components(dpr_args.encoder_model_type, dpr_args, inference_only=True)
     encoder = encoder.question_model
-    encoder, _ = setup_for_distributed_mode(encoder, None, namespace.device, namespace.n_gpu,
-                                            namespace.local_rank,
-                                            namespace.fp16)
+    encoder, _ = setup_for_distributed_mode(encoder, None, dpr_args.device, dpr_args.n_gpu,
+                                            dpr_args.local_rank,
+                                            dpr_args.fp16)
     encoder.eval()
     # load weights from the model file
     model_to_load = get_model_obj(encoder)
@@ -34,7 +50,7 @@ def main(args) :
                               key.startswith('question_model.')}
     model_to_load.load_state_dict(question_encoder_state)
 
-    def get_embedding(q) :
+    def get_embedding(q):
         with torch.no_grad():
             batch_token_tensors = [tensorizer.text_to_tensor(q)]
             q_ids_batch = torch.stack(batch_token_tensors, dim=0).cuda()
@@ -50,19 +66,18 @@ def main(args) :
     df_pseudo = pd.DataFrame()
     psuedo_questions, pseudo_paras, psuedo_scores = UQ, [], []
     score_sum = 0
-    print ('starting')
+
     embeddings = np.array([e[1] for e in embeddings])
     q_embeddings = np.array([get_embedding(q) for q in UQ])
     dpr_scores = np.matmul(q_embeddings, embeddings.T)
-    for i in range(len(UQ)) :
+    for i in tqdm(range(len(UQ))):
         scores = list(dpr_scores[i])
         max_score = max(scores)
         score_sum += max_score
         pseudo_paras.append(UP[scores.index(max_score)])
         psuedo_scores.append(max_score)
-        if i%500==0 :
-            print ('Completed {} out of {} questions. Moving average DPR score = {}'.format(i+1, len(UQ), score_sum/(i+1)))
-    f.close()
+        if i % 5000 == 0:
+            print('Completed {} out of {} questions. Moving average DPR score = {}'.format(i+1, len(UQ), score_sum/(i+1)))
 
     df_pseudo['input_text'] = pd.Series(pseudo_paras)
     df_pseudo['target_text'] = pd.Series(psuedo_questions)

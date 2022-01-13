@@ -53,14 +53,14 @@ def validate(tokenizer, model, device, loader):
             predictions.extend(preds)
     return predictions
 
+
 def main(args):
     
-    torch.manual_seed(42) # pytorch random seed
-    np.random.seed(42) # numpy random seed
-    torch.backends.cudnn.deterministic = True
+    torch.manual_seed(42)
+    np.random.seed(42)
 
     tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
-    
+
     df = pd.read_csv(args.file, sep='\t')
     df_set = CustomDataset(df, tokenizer, 512)
     df_params = {
@@ -77,11 +77,12 @@ def main(args):
     final_df = pd.DataFrame()
     final_df['input_text'] = df['input_text']
     final_df['target_text'] = pd.Series(predictions)
-    final_df.to_csv(args.checkpoint+'QG-predictions-50K.tsv', sep='\t')
+    final_df.to_csv(args.checkpoint + 'QG-predictions-50K.tsv', sep='\t')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint', required=False, type=str, default='all')
-    parser.add_argument('--file', required=False, type=str, default='data/unlabeled_passages.tsv')
+    parser.add_argument('--checkpoint', required=True, type=str)
+    parser.add_argument('--file', required=True, type=str)
     args = parser.parse_args()
     main(args)

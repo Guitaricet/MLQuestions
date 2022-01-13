@@ -5,8 +5,11 @@ import torch
 from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler
 from transformers import BartTokenizer, BartForConditionalGeneration
 from torch import cuda
+from tqdm.auto import tqdm
+
 
 device = 'cuda' if cuda.is_available() else 'cpu'
+
 
 class CustomDataset(Dataset):
 
@@ -47,7 +50,7 @@ class CustomDataset(Dataset):
 def compute_losses(tokenizer, model, device, loader):
     model.train()
     losses = []
-    for _,data in enumerate(loader, 0):
+    for data in tqdm(loader, desc="Computing loss", total=len(loader)):
         y = data['target_ids'].to(device, dtype = torch.long)
         y_ids = y[:, :-1].contiguous()
         lm_labels = y[:, 1:].clone().detach()
@@ -58,11 +61,9 @@ def compute_losses(tokenizer, model, device, loader):
         outputs = model(input_ids = ids, attention_mask = mask, decoder_input_ids=y_ids, lm_labels=lm_labels)
         losses.append(str(outputs[0].item()))
         
-        if _%1000==0 : 
-            print ('Completed {} out of {}'.format(_, len(loader))) 
     return losses
 
-def main(args) :
+def main(args):
     
     torch.manual_seed(42) # pytorch random seed
     np.random.seed(42) # numpy random seed
@@ -71,15 +72,16 @@ def main(args) :
     tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
     
     train_df = pd.read_csv(args.file, sep='\t')
-    if 'target_text' not in train_df :
+    if 'target_text' not in train_df:
         train_df['target_text'] = train_df['target_text0']
+
     train_df = train_df[['input_text','target_text']]
     training_set = CustomDataset(train_df, tokenizer, 512, 150)
     train_params = {
         'batch_size': 1,
         'shuffle': True,
         'num_workers': 2
-        }
+    }
     training_loader = DataLoader(training_set, **train_params)
     model = BartForConditionalGeneration.from_pretrained(args.checkpoint)
     model = model.to(device)
@@ -88,7 +90,8 @@ def main(args) :
     f = open(args.save_to, 'w')
     f.write('\n'.join(losses))
     f.close()
-    
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--file', required=False, type=str, default='data/dev_1.tsv')

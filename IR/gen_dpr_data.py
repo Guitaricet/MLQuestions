@@ -4,13 +4,17 @@ import pandas as pd
 from rank_bm25 import BM25Okapi
 import argparse
 
-def get_negative_ctxts(question, passage, k, corpus, bm25) :
+from tqdm.auto import tqdm
+
+
+def get_negative_ctxts(question, passage, k, corpus, bm25):
     passages = bm25.get_top_n(question.split(), corpus, n=k+1)
-    if passage in passages :
+    if passage in passages:
         passages.remove(passage)
     return passages[:k]
 
-def main(args) :
+
+def main(args):
     qg_aug_data = pd.read_csv(args.input_file, sep='\t')
 
     corpus = pd.read_csv('../data/passages_unaligned.tsv', sep='\t')['input_text'].tolist()
@@ -19,9 +23,7 @@ def main(args) :
 
     laques_data = []
     paras, questions = qg_aug_data['input_text'].tolist(), qg_aug_data['target_text'].tolist()
-    for i in range(len(paras)) :
-        if i%500 == 0 :
-            print ('Completed : ', i)
+    for i in tqdm(range(len(paras))):
         datum = {
                  'question': questions[i], 
                  'positive_ctxs': [{'text': paras[i]}], 
@@ -30,10 +32,10 @@ def main(args) :
                 }
         laques_data.append(datum)
 
-    json_string = json.dumps(laques_data)
     with open(args.out_file, 'w') as f:
         json.dump(laques_data, f)
-    print (len(laques_data))
+    print(len(laques_data))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

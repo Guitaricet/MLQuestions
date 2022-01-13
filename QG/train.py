@@ -5,8 +5,11 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BartTokenizer, BartForConditionalGeneration
 from torch import cuda
+from tqdm.auto import tqdm
+
 
 device = 'cuda' if cuda.is_available() else 'cpu'
+
 
 class CustomDataset(Dataset):
 
@@ -47,7 +50,8 @@ class CustomDataset(Dataset):
 
 def train(args, epoch, tokenizer, model, device, loader, optimizer):
     model.train()
-    for _,data in enumerate(loader, 0):
+
+    for data in tqdm(enumerate(loader, 0), desc="Training", total=len(loader)):
         y = data['target_ids'].to(device, dtype = torch.long)
         y_ids = y[:, :-1].contiguous()
         lm_labels = y[:, 1:].clone().detach()
@@ -57,13 +61,10 @@ def train(args, epoch, tokenizer, model, device, loader, optimizer):
 
         outputs = model(input_ids = ids, attention_mask = mask, decoder_input_ids=y_ids, lm_labels=lm_labels)
         loss = outputs[0]
-
-        if _%30 == 0 :
-            print ('Epoch {}: Completed {} batches out of {}'.format(epoch+1, _, len(loader)))
-        
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+    
 
 def main(args):
 
@@ -98,9 +99,10 @@ def main(args):
     for epoch in range(args.epochs):
         train(args, epoch, tokenizer, model, device, training_loader, optimizer)
         print(f'Finished Epoch: {epoch+1}')
-        print ('---------------------------------------------------------------------')
+        print('---------------------------------------------------------------------')
     model.save_pretrained('outputs/')
-    
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', required=False, type=int, default=1)

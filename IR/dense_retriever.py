@@ -98,15 +98,8 @@ class DenseRetriever(object):
 def parse_qa_csv_file(location) -> Iterator[Tuple[str, List[str]]]:
     df = pd.read_csv(location, sep='\t')
     questions, answers = df['target_text'].tolist(), df['input_text'].tolist()
-    for q,a in zip(questions, answers) :
+    for q, a in zip(questions, answers):
         yield q,a
-    
-    '''with open(location) as ifile:
-        reader = csv.reader(ifile, delimiter='\t')
-        for row in reader:
-            question = row[0]
-            answers = eval(row[1])
-            yield question, answers'''
 
 
 def validate(passages: Dict[object, Tuple[str, str]], answers: List[List[str]],
@@ -245,7 +238,7 @@ def main(args):
 
     #all_passages = load_passages(args.ctx_file)
     all_passages = {}
-    for i in range(len(question_answers)) :
+    for i in range(len(question_answers)):
         all_passages[str(i)] = (question_answers[i], '') 
 
     if len(all_passages) == 0:
