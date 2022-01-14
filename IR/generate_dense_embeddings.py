@@ -32,13 +32,15 @@ from dpr.utils.model_utils import setup_for_distributed_mode, get_model_obj, loa
 
 
 logging.basicConfig(
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
     level=logging.INFO,
     stream=sys.stdout,
 )
-logger = logging.getLogger()
-logging.getLogger("transformers.configuration_utils").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
+logging.getLogger('transformers.configuration_utils').setLevel(logging.WARNING)
+logging.getLogger('transformers.modeling_utils').setLevel(logging.WARNING)
+logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.WARNING)
 
 
 def gen_ctx_vectors(ctx_rows: List[Tuple[object, str, str]], model: nn.Module, tensorizer: Tensorizer,

@@ -5,8 +5,11 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BartTokenizer, BartForConditionalGeneration
 from torch import cuda
+from tqdm.auto import tqdm
+
 
 device = 'cuda' if cuda.is_available() else 'cpu'
+
 
 class CustomDataset(Dataset):
 
@@ -33,11 +36,12 @@ class CustomDataset(Dataset):
             'source_mask': source_mask.to(dtype=torch.long)
         }
 
+
 def validate(tokenizer, model, device, loader):
     model.eval()
     predictions = []
     with torch.no_grad():
-        for _, data in enumerate(loader, 0):
+        for data in tqdm(loader, desc="Validating", total=len(loader)):
             ids = data['source_ids'].to(device, dtype = torch.long)
             mask = data['source_mask'].to(device, dtype = torch.long)
 
@@ -55,25 +59,29 @@ def validate(tokenizer, model, device, loader):
 
 
 def main(args):
-    
+    print(f"Starting QG/generate.py with args {args}")
+
     torch.manual_seed(42)
     np.random.seed(42)
 
+    print("Loading tokenizer...")
     tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
 
+    print("Loading data and creating dataset...")
     df = pd.read_csv(args.file, sep='\t')
     df_set = CustomDataset(df, tokenizer, 512)
     df_params = {
         'batch_size': 32,
         'shuffle': False,
         'num_workers': 2
-        }
+    }
     df_loader = DataLoader(df_set, **df_params)
-    
+
+    print("Loading model...")
     model = BartForConditionalGeneration.from_pretrained(args.checkpoint)
     model = model.to(device)
     predictions = validate(tokenizer, model, device, df_loader)
-    
+
     final_df = pd.DataFrame()
     final_df['input_text'] = df['input_text']
     final_df['target_text'] = pd.Series(predictions)

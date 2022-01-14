@@ -1,20 +1,34 @@
-from dpr.models import init_biencoder_components
-from dpr.utils.model_utils import setup_for_distributed_mode, get_model_obj, load_states_from_checkpoint
-from argparse import Namespace
-import torch
-from dpr.options import add_encoder_params, setup_args_gpu, print_args, set_encoder_params_from_state, \
-    add_tokenizer_params, add_cuda_params
+import sys
+import logging
+import argparse
 import pickle
+
+import torch
 import numpy as np
 import pandas as pd
-import argparse
 from tqdm.auto import tqdm
+
+from dpr.models import init_biencoder_components
+from dpr.utils.model_utils import setup_for_distributed_mode, get_model_obj, load_states_from_checkpoint
+from dpr.options import set_encoder_params_from_state
+
+
+logging.basicConfig(
+    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=logging.INFO,
+    stream=sys.stdout,
+)
+logger = logging.getLogger(__name__)
+logging.getLogger('transformers.configuration_utils').setLevel(logging.WARNING)
+logging.getLogger('transformers.modeling_utils').setLevel(logging.WARNING)
+logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.WARNING)
 
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    dpr_args = Namespace(
+    dpr_args = argparse.Namespace(
         batch_size=32,
         distributed_world_size=1,
         device=device,
@@ -44,7 +58,7 @@ def main(args):
     encoder.eval()
     # load weights from the model file
     model_to_load = get_model_obj(encoder)
-    print('Loading saved model state ...')
+    logger.info('Loading saved model state ...')
     prefix_len = len('question_model.')
     question_encoder_state = {key[prefix_len:]: value for (key, value) in saved_state.model_dict.items() if
                               key.startswith('question_model.')}
@@ -62,7 +76,11 @@ def main(args):
     UP = pd.read_csv('../data/passages_unaligned.tsv', sep='\t')['input_text'].tolist()
     with open(args.embeddings, 'rb') as f:
         embeddings = pickle.load(f)
+
     UQ = pd.read_csv('../data/questions_unaligned.tsv', sep='\t')['target_text'].tolist()
+    # some of them could be nan, we replace them with a placeholder instead of removing them to maintain order and avoid indexing issues
+    UQ = [u if isinstance(u, str) else "nan" for u in UQ]
+
     df_pseudo = pd.DataFrame()
     psuedo_questions, pseudo_paras, psuedo_scores = UQ, [], []
     score_sum = 0
@@ -70,18 +88,23 @@ def main(args):
     embeddings = np.array([e[1] for e in embeddings])
     q_embeddings = np.array([get_embedding(q) for q in UQ])
     dpr_scores = np.matmul(q_embeddings, embeddings.T)
-    for i in tqdm(range(len(UQ))):
+
+    for i in tqdm(range(len(UQ)), desc="Checking questions DPR scores"):
         scores = list(dpr_scores[i])
         max_score = max(scores)
         score_sum += max_score
         pseudo_paras.append(UP[scores.index(max_score)])
         psuedo_scores.append(max_score)
-        if i % 5000 == 0:
-            print('Completed {} out of {} questions. Moving average DPR score = {}'.format(i+1, len(UQ), score_sum/(i+1)))
+
+        if i % 10_000 == 0 or i == len(UQ) - 1:
+            logger.info('Completed {} out of {} questions. Moving average DPR score = {}'.format(i+1, len(UQ), score_sum/(i+1)))
 
     df_pseudo['input_text'] = pd.Series(pseudo_paras)
     df_pseudo['target_text'] = pd.Series(psuedo_questions)
     df_pseudo.to_csv(args.out_file, sep='\t')
+
+    logging.info('Done!')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

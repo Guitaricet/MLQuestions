@@ -1,23 +1,37 @@
-from dpr.models import init_biencoder_components
-from dpr.utils.model_utils import setup_for_distributed_mode, get_model_obj, load_states_from_checkpoint
-from argparse import Namespace
-import torch
-from dpr.options import add_encoder_params, setup_args_gpu, print_args, set_encoder_params_from_state, \
-    add_tokenizer_params, add_cuda_params
+import sys
+import logging
 import pickle
+import json
+import argparse
+
+import torch
 import numpy as np
 import pandas as pd
-import json
-from argparse import Namespace
-import argparse
 from tqdm.auto import tqdm
+
+from dpr.models import init_biencoder_components
+from dpr.utils.model_utils import setup_for_distributed_mode, get_model_obj, load_states_from_checkpoint
+
+from dpr.options import set_encoder_params_from_state
+
+
+logging.basicConfig(
+    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=logging.INFO,
+    stream=sys.stdout,
+)
+logger = logging.getLogger(__name__)
+logging.getLogger('transformers.configuration_utils').setLevel(logging.WARNING)
+logging.getLogger('transformers.modeling_utils').setLevel(logging.WARNING)
+logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.WARNING)
 
 
 def main(args):
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    dpr_args = Namespace(
+    dpr_args = argparse.Namespace(
         batch_size=32,
         distributed_world_size=1,
         device=device,
@@ -47,7 +61,7 @@ def main(args):
     encoder.eval()
     # load weights from the model file
     model_to_load = get_model_obj(encoder)
-    print('Loading saved model state ...')
+    logger.info('Loading saved model state ...')
     prefix_len = len('question_model.')
     question_encoder_state = {key[prefix_len:]: value for (key, value) in saved_state.model_dict.items() if
                               key.startswith('question_model.')}
@@ -74,7 +88,7 @@ def main(args):
             if np.dot(q_embedding, embeddings[i][1]) > args.threshold:
                 final_data.append(data[i])
 
-        print('Total filtered data: ', len(final_data))
+        logger.info('Total filtered data: ', len(final_data))
         with open(args.output_file, 'w') as f:
             json.dump(final_data, f)
 
@@ -94,7 +108,7 @@ def main(args):
         df = pd.DataFrame()
         df['input_text'] = pd.Series(filtered_p)
         df['target_text'] = pd.Series(filtered_q)
-        print('Total filtered data: ', len(df))
+        logger.info('Total filtered data: ', len(df))
         df.to_csv(args.output_file, sep='\t')
 
     if args.input_type == 'tsv':

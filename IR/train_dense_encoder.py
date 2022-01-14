@@ -36,7 +36,7 @@ from dpr.utils.model_utils import setup_for_distributed_mode, move_to_device, ge
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 if (logger.hasHandlers()):
     logger.handlers.clear()
